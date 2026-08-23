@@ -17,6 +17,11 @@ export interface Table {
   header: TableCell[];
   alignments: Alignment[];
   rows: TableCell[][];
+  // the nearest heading above the table, or null if the table isn't preceded
+  // by one - lets callers select a table by heading instead of position.
+  heading: string | null;
+  // 0-based position among the tables found in the file, in source order.
+  index: number;
   // kept around so later errors (e.g. during lookup) can quote the exact
   // offending line instead of just naming a line number.
   sourceLines: string[];
@@ -29,19 +34,39 @@ interface RawCell {
 }
 
 const DELIMITER_CELL = /^:?-+:?$/;
+const HEADING_LINE = /^#{1,6}\s+(.+?)\s*$/;
 
-export function parseTable(source: string, file: string): Table {
+// Scans the whole file and returns every table found, in source order, each
+// tagged with the heading immediately above it (if any). A file with no
+// tables at all is an error; a malformed table found along the way is also
+// an error, since a table that looks intended but is broken shouldn't be
+// silently skipped in favor of a later one.
+export function parseTables(source: string, file: string): Table[] {
   const lines = source.split("\n");
+  const tables: Table[] = [];
+  let heading: string | null = null;
 
-  let headerLineIndex = -1;
-  for (let i = 0; i < lines.length - 1; i++) {
-    if (lines[i].includes("|") && isDelimiterLine(lines[i + 1])) {
-      headerLineIndex = i;
-      break;
+  let i = 0;
+  while (i < lines.length) {
+    const headingMatch = lines[i].match(HEADING_LINE);
+    if (headingMatch) {
+      heading = headingMatch[1];
+      i++;
+      continue;
     }
+
+    if (i < lines.length - 1 && lines[i].includes("|") && isDelimiterLine(lines[i + 1])) {
+      const { table, nextLine } = parseTableAt(lines, i, file, heading, tables.length);
+      tables.push(table);
+      heading = null;
+      i = nextLine;
+      continue;
+    }
+
+    i++;
   }
 
-  if (headerLineIndex === -1) {
+  if (tables.length === 0) {
     throw new MarkdownTableError(
       "no markdown table found (expected a header row followed by a |---|---| delimiter row)",
       file,
@@ -51,6 +76,63 @@ export function parseTable(source: string, file: string): Table {
     );
   }
 
+  return tables;
+}
+
+// Resolves a `--table` selector against the tables found in a file. A
+// selector of `undefined` means "the first table", matching the tool's
+// original single-table behavior. A selector made of digits is an index;
+// anything else is matched against table headings.
+export function selectTable(tables: Table[], selector: string | undefined, file: string): Table {
+  if (selector === undefined) return tables[0];
+
+  if (/^\d+$/.test(selector)) {
+    const table = tables[Number(selector)];
+    if (!table) {
+      throw new MarkdownTableError(
+        `no table at index ${selector} - file has ${tables.length} table(s) (indexes 0-${tables.length - 1})`,
+        file,
+        1,
+        1,
+        "",
+      );
+    }
+    return table;
+  }
+
+  const matches = tables.filter((table) => table.heading === selector);
+  if (matches.length === 1) return matches[0];
+
+  const summary = tables
+    .map((table) => `${table.index}: ${table.heading ?? "(no heading)"}`)
+    .join(", ");
+
+  if (matches.length > 1) {
+    throw new MarkdownTableError(
+      `${matches.length} tables have the heading "${selector}" - select by index instead - available tables: ${summary}`,
+      file,
+      1,
+      1,
+      "",
+    );
+  }
+
+  throw new MarkdownTableError(
+    `no table with heading "${selector}" - available tables: ${summary}`,
+    file,
+    1,
+    1,
+    "",
+  );
+}
+
+function parseTableAt(
+  lines: string[],
+  headerLineIndex: number,
+  file: string,
+  heading: string | null,
+  index: number,
+): { table: Table; nextLine: number } {
   const headerLine = lines[headerLineIndex];
   const delimiterLine = lines[headerLineIndex + 1];
   const headerCellsRaw = splitRow(headerLine);
@@ -85,8 +167,9 @@ export function parseTable(source: string, file: string): Table {
   const header = headerCellsRaw.map((cell) => toTableCell(cell, headerLineIndex + 1));
 
   const rows: TableCell[][] = [];
-  for (let i = headerLineIndex + 2; i < lines.length; i++) {
-    const line = lines[i];
+  let nextLine = headerLineIndex + 2;
+  for (; nextLine < lines.length; nextLine++) {
+    const line = lines[nextLine];
     if (line.trim() === "" || !line.includes("|")) break;
 
     const rawCells = splitRow(line);
@@ -99,16 +182,16 @@ export function parseTable(source: string, file: string): Table {
       throw new MarkdownTableError(
         `row has ${rawCells.length} column(s) but the header has ${header.length} (${columnNames})`,
         file,
-        i + 1,
+        nextLine + 1,
         pointAt.column,
         line,
       );
     }
 
-    rows.push(rawCells.map((cell) => toTableCell(cell, i + 1)));
+    rows.push(rawCells.map((cell) => toTableCell(cell, nextLine + 1)));
   }
 
-  return { file, header, alignments, rows, sourceLines: lines };
+  return { table: { file, header, alignments, rows, heading, index, sourceLines: lines }, nextLine };
 }
 
 function isDelimiterLine(line: string): boolean {

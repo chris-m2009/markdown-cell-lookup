@@ -58,17 +58,30 @@ config.md:6:32 - row has 4 column(s) but the header has 3 (Name, Default, Descri
 ## Usage
 
 ```
-mdcell <file.md> --key <column> --value <value> --target <column>
+mdcell <file.md> --key <column> --value <value> --target <column> [--table <heading|index>]
 ```
 
 - `--key` - the column to match against.
 - `--value` - the exact value to look for in that column.
 - `--target` - the column whose value gets printed.
+- `--table` - which table to use, if the file has more than one. Give the
+  heading text that appears directly above the table, or its 0-based index
+  in source order. Omit it to use the first table in the file.
 
 Matching is exact (case-sensitive) on the trimmed cell text. If exactly one
 row matches, the target cell's value is printed to stdout and the process
 exits 0. Anything else - no match, more than one match, a bad column name, a
 malformed table - is an error on stderr with an exit code of 1.
+
+If a file has several tables under headings, refer to them by heading:
+
+```
+$ mdcell config.md --key Name --value LOG_LEVEL --target Default --table "Environment variables"
+info
+```
+
+Every table in the file is parsed up front, so a malformed table later in
+the file is still reported even if the one you selected is fine.
 
 ## Building
 
@@ -82,9 +95,9 @@ node dist/cli.js config.md --key Name --value PORT --target Default
 
 ## How it works
 
-- `src/parser.ts` reads the first `header row + delimiter row + body rows`
-  table it finds in the file, tracking the exact line and column each cell
-  started at.
+- `src/parser.ts` reads every `header row + delimiter row + body rows`
+  table in the file, tracking the exact line and column each cell started
+  at and the heading (if any) that precedes each table.
 - `src/lookup.ts` resolves column names to indexes (with a suggestion when
   a name is close but wrong) and finds the row matching the key.
 - `src/errors.ts` defines a single error type that knows how to render
@@ -94,9 +107,8 @@ node dist/cli.js config.md --key Name --value PORT --target Default
 
 ## Current limitations
 
-Only the first table in a file is considered, and pipes inside inline code
-spans (`` `a | b` ``) aren't yet escaped from being treated as column
-separators. See the roadmap for what's planned.
+Pipes inside inline code spans (`` `a | b` ``) aren't yet escaped from
+being treated as column separators. See the roadmap for what's planned.
 
 ## License
 

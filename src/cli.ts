@@ -1,19 +1,22 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { MarkdownTableError } from "./errors.js";
-import { parseTable } from "./parser.js";
+import { parseTables, selectTable } from "./parser.js";
 import { lookup } from "./lookup.js";
 
-const USAGE = `usage: mdcell <file.md> --key <column> --value <value> --target <column>
+const USAGE = `usage: mdcell <file.md> --key <column> --value <value> --target <column> [--table <heading|index>]
 
 example:
-  mdcell config.md --key Name --value LOG_LEVEL --target Default`;
+  mdcell config.md --key Name --value LOG_LEVEL --target Default
+  mdcell config.md --key Name --value LOG_LEVEL --target Default --table "Environment variables"
+  mdcell config.md --key Name --value LOG_LEVEL --target Default --table 1`;
 
 interface Args {
   file: string;
   key: string;
   value: string;
   target: string;
+  table?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -38,7 +41,7 @@ function parseArgs(argv: string[]): Args {
     throw new Error(USAGE);
   }
 
-  return { file, key: flags.key, value: flags.value, target: flags.target };
+  return { file, key: flags.key, value: flags.value, target: flags.target, table: flags.table };
 }
 
 function main(): void {
@@ -61,7 +64,8 @@ function main(): void {
   }
 
   try {
-    const table = parseTable(source, args.file);
+    const tables = parseTables(source, args.file);
+    const table = selectTable(tables, args.table, args.file);
     const result = lookup(table, args.key, args.value, args.target);
     console.log(result.value);
   } catch (err) {
