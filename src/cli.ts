@@ -4,12 +4,13 @@ import { MarkdownTableError } from "./errors.js";
 import { parseTables, selectTable } from "./parser.js";
 import { lookup } from "./lookup.js";
 
-const USAGE = `usage: mdcell <file.md> --key <column> --value <value> --target <column> [--table <heading|index>]
+const USAGE = `usage: mdcell <file.md> --key <column> --value <value> --target <column> [--table <heading|index>] [--all]
 
 example:
   mdcell config.md --key Name --value LOG_LEVEL --target Default
   mdcell config.md --key Name --value LOG_LEVEL --target Default --table "Environment variables"
-  mdcell config.md --key Name --value LOG_LEVEL --target Default --table 1`;
+  mdcell config.md --key Name --value LOG_LEVEL --target Default --table 1
+  mdcell config.md --key Name --value LOG_LEVEL --target Default --all`;
 
 interface Args {
   file: string;
@@ -17,14 +18,20 @@ interface Args {
   value: string;
   target: string;
   table?: string;
+  all: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
   const positional: string[] = [];
   const flags: Record<string, string> = {};
+  let all = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
+    if (arg === "--all") {
+      all = true;
+      continue;
+    }
     if (arg.startsWith("--")) {
       const name = arg.slice(2);
       const value = argv[i + 1];
@@ -41,7 +48,7 @@ function parseArgs(argv: string[]): Args {
     throw new Error(USAGE);
   }
 
-  return { file, key: flags.key, value: flags.value, target: flags.target, table: flags.table };
+  return { file, key: flags.key, value: flags.value, target: flags.target, table: flags.table, all };
 }
 
 function main(): void {
@@ -66,8 +73,8 @@ function main(): void {
   try {
     const tables = parseTables(source, args.file);
     const table = selectTable(tables, args.table, args.file);
-    const result = lookup(table, args.key, args.value, args.target);
-    console.log(result.value);
+    const results = lookup(table, args.key, args.value, args.target, { all: args.all });
+    for (const result of results) console.log(result.value);
   } catch (err) {
     if (err instanceof MarkdownTableError) {
       console.error(err.format());

@@ -6,7 +6,18 @@ export interface LookupResult {
   line: number;
 }
 
-export function lookup(table: Table, keyColumn: string, keyValue: string, targetColumn: string): LookupResult {
+export interface LookupOptions {
+  // return every matching row instead of requiring exactly one.
+  all?: boolean;
+}
+
+export function lookup(
+  table: Table,
+  keyColumn: string,
+  keyValue: string,
+  targetColumn: string,
+  options: LookupOptions = {},
+): LookupResult[] {
   const keyIndex = findColumnIndex(table, keyColumn);
   const targetIndex = findColumnIndex(table, targetColumn);
 
@@ -23,11 +34,11 @@ export function lookup(table: Table, keyColumn: string, keyValue: string, target
     );
   }
 
-  if (matches.length > 1) {
+  if (!options.all && matches.length > 1) {
     const lines = matches.map((row) => row[keyIndex].position.line).join(", ");
     const first = matches[0][keyIndex];
     throw new MarkdownTableError(
-      `"${keyColumn}" = "${keyValue}" matches ${matches.length} rows (lines ${lines}); expected exactly one`,
+      `"${keyColumn}" = "${keyValue}" matches ${matches.length} rows (lines ${lines}); expected exactly one - pass --all to return every match`,
       table.file,
       first.position.line,
       first.position.column,
@@ -35,8 +46,7 @@ export function lookup(table: Table, keyColumn: string, keyValue: string, target
     );
   }
 
-  const target = matches[0][targetIndex];
-  return { value: target.raw, line: target.position.line };
+  return matches.map((row) => ({ value: row[targetIndex].raw, line: row[targetIndex].position.line }));
 }
 
 function findColumnIndex(table: Table, name: string): number {

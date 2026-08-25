@@ -58,7 +58,7 @@ config.md:6:32 - row has 4 column(s) but the header has 3 (Name, Default, Descri
 ## Usage
 
 ```
-mdcell <file.md> --key <column> --value <value> --target <column> [--table <heading|index>]
+mdcell <file.md> --key <column> --value <value> --target <column> [--table <heading|index>] [--all]
 ```
 
 - `--key` - the column to match against.
@@ -67,11 +67,18 @@ mdcell <file.md> --key <column> --value <value> --target <column> [--table <head
 - `--table` - which table to use, if the file has more than one. Give the
   heading text that appears directly above the table, or its 0-based index
   in source order. Omit it to use the first table in the file.
+- `--all` - print the target value from every matching row (one per line)
+  instead of requiring exactly one match.
 
 Matching is exact (case-sensitive) on the trimmed cell text. If exactly one
 row matches, the target cell's value is printed to stdout and the process
-exits 0. Anything else - no match, more than one match, a bad column name, a
-malformed table - is an error on stderr with an exit code of 1.
+exits 0. Anything else - no match, more than one match without `--all`, a bad
+column name, a malformed table - is an error on stderr with an exit code of
+1.
+
+With `--all`, any number of matches (including one) is fine; each match's
+target value is printed on its own line, in the row order they appear in the
+table. It's still an error if there are zero matches.
 
 If a file has several tables under headings, refer to them by heading:
 
