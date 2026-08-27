@@ -112,11 +112,6 @@ node dist/cli.js config.md --key Name --value PORT --target Default
 - `src/cli.ts` wires argument parsing, file reading, and error formatting
   together.
 
-## Current limitations
-
-Pipes inside inline code spans (`` `a | b` ``) aren't yet escaped from
-being treated as column separators. See the roadmap for what's planned.
-
 ## License
 
 MIT

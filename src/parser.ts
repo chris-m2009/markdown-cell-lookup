@@ -216,10 +216,12 @@ function trimTrailingWhitespace(line: string): string {
 // Splits one table row into cells, tracking the 1-based column each cell
 // started at so later error messages can point at the exact offending cell
 // rather than just "somewhere on line N". Handles an escaped pipe (\|)
-// inside a cell and an optional leading/trailing pipe on the row.
+// and a pipe inside an inline code span (`a | b`), neither of which end
+// a cell, plus an optional leading/trailing pipe on the row.
 function splitRow(rawLine: string): RawCell[] {
   const line = trimTrailingWhitespace(rawLine);
   const len = line.length;
+  const codeSpans = findCodeSpans(line);
 
   let start = 0;
   while (start < len && (line[start] === " " || line[start] === "\t")) start++;
@@ -227,7 +229,7 @@ function splitRow(rawLine: string): RawCell[] {
 
   const boundaries: number[] = [];
   for (let i = start; i < len; i++) {
-    if (line[i] === "|" && line[i - 1] !== "\\") boundaries.push(i);
+    if (line[i] === "|" && line[i - 1] !== "\\" && !isInsideCodeSpan(i, codeSpans)) boundaries.push(i);
   }
 
   const cells: RawCell[] = [];
@@ -242,6 +244,53 @@ function splitRow(rawLine: string): RawCell[] {
   if (lastBoundary === len - 1 && cells.length > 1) cells.pop();
 
   return cells;
+}
+
+// Finds inline code spans (`` `text` ``, ```` ``text`` ````, ...) on a line,
+// following the same rule Markdown uses: a run of N backticks opens a span,
+// and it's closed by the next run of exactly N backticks. A pipe inside one
+// of these ranges is content, not a column separator. An opening run with no
+// matching close (e.g. a stray backtick) isn't a span at all.
+function findCodeSpans(line: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  const len = line.length;
+  let i = 0;
+
+  while (i < len) {
+    if (line[i] !== "`") {
+      i++;
+      continue;
+    }
+
+    const openStart = i;
+    while (i < len && line[i] === "`") i++;
+    const openLength = i - openStart;
+
+    let found = false;
+    let j = i;
+    while (j < len) {
+      if (line[j] !== "`") {
+        j++;
+        continue;
+      }
+      const runStart = j;
+      while (j < len && line[j] === "`") j++;
+      if (j - runStart === openLength) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) continue;
+    spans.push([openStart, j]);
+    i = j;
+  }
+
+  return spans;
+}
+
+function isInsideCodeSpan(index: number, spans: Array<[number, number]>): boolean {
+  return spans.some(([start, end]) => index >= start && index < end);
 }
 
 function toTableCell(cell: RawCell, line: number): TableCell {
