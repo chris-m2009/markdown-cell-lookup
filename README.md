@@ -100,6 +100,19 @@ tsc
 node dist/cli.js config.md --key Name --value PORT --target Default
 ```
 
+## Tests
+
+```
+npm test
+```
+
+Compiles `src/` and `test/` with `tsc -p tsconfig.test.json` and runs the
+result with Node's built-in test runner - no test framework dependency.
+`test/parser.test.ts` covers the parser's edge cases: alignment markers,
+optional leading/trailing pipes, escaped pipes and pipes inside code spans,
+multi-table files, and the exact line/column reported for each malformed
+table shape.
+
 ## How it works
 
 - `src/parser.ts` reads every `header row + delimiter row + body rows`

@@ -10,7 +10,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.js",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/test"
   },
   "engines": {
     "node": ">=18"
