@@ -4,13 +4,14 @@ import { MarkdownTableError } from "./errors.js";
 import { parseTables, selectTable } from "./parser.js";
 import { lookup } from "./lookup.js";
 
-const USAGE = `usage: mdcell <file.md> --key <column> --value <value> --target <column> [--table <heading|index>] [--all]
+const USAGE = `usage: mdcell <file.md|-> --key <column> --value <value> --target <column> [--table <heading|index>] [--all]
 
 example:
   mdcell config.md --key Name --value LOG_LEVEL --target Default
   mdcell config.md --key Name --value LOG_LEVEL --target Default --table "Environment variables"
   mdcell config.md --key Name --value LOG_LEVEL --target Default --table 1
-  mdcell config.md --key Name --value LOG_LEVEL --target Default --all`;
+  mdcell config.md --key Name --value LOG_LEVEL --target Default --all
+  cat config.md | mdcell - --key Name --value LOG_LEVEL --target Default`;
 
 interface Args {
   file: string;
@@ -63,16 +64,21 @@ function main(): void {
 
   let source: string;
   try {
-    source = readFileSync(args.file, "utf8");
+    // fd 0 is stdin; reading it synchronously by fd is how Node reads a
+    // pipe or redirect without going through the async stream API.
+    source = args.file === "-" ? readFileSync(0, "utf8") : readFileSync(args.file, "utf8");
   } catch (err) {
-    console.error(`could not read ${args.file}: ${(err as Error).message}`);
+    const what = args.file === "-" ? "stdin" : args.file;
+    console.error(`could not read ${what}: ${(err as Error).message}`);
     process.exitCode = 1;
     return;
   }
 
+  const displayFile = args.file === "-" ? "(stdin)" : args.file;
+
   try {
-    const tables = parseTables(source, args.file);
-    const table = selectTable(tables, args.table, args.file);
+    const tables = parseTables(source, displayFile);
+    const table = selectTable(tables, args.table, displayFile);
     const results = lookup(table, args.key, args.value, args.target, { all: args.all });
     for (const result of results) console.log(result.value);
   } catch (err) {

@@ -58,7 +58,14 @@ config.md:6:32 - row has 4 column(s) but the header has 3 (Name, Default, Descri
 ## Usage
 
 ```
-mdcell <file.md> --key <column> --value <value> --target <column> [--table <heading|index>] [--all]
+mdcell <file.md|-> --key <column> --value <value> --target <column> [--table <heading|index>] [--all]
+```
+
+Pass `-` in place of a file path to read the table from stdin instead:
+
+```
+$ cat config.md | mdcell - --key Name --value LOG_LEVEL --target Default
+info
 ```
 
 - `--key` - the column to match against.
